@@ -1,0 +1,721 @@
+@vite(['resources/css/app.css'])
+
+
+<div class="flex h-[calc(100vh-6rem)] gap-3 overflow-hidden relative z-0 chat-inbox-container rounded-xl" 
+     wire:poll.10s="refreshList"
+     x-data="{ openFilters: false }">
+    
+    <!-- COLUMNA 1 (Panel de la Izquierda): Lista de Chats y Filtros -->
+    <div class="w-[380px] rounded-xl flex flex-col overflow-hidden shadow-sm dark:shadow-2xl border chat-panel-left shrink-0">
+        
+        <!-- Buscador Superior y Botón Filtros (Popover) -->
+        <div class="p-3.5 border-b chat-header-bg relative shrink-0">
+            <div class="flex items-center gap-2">
+
+                <!-- Buscador: componente nativo Filament -->
+                <div class="flex-1">
+                    <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
+                        <x-filament::input
+                            type="text"
+                            wire:model.live.debounce.300ms="search"
+                            placeholder="Nombre, número o email"
+                        />
+                    </x-filament::input.wrapper>
+                </div>
+
+                <!-- Botón Filtros: componente nativo Filament, color primary cuando activo -->
+                <x-filament::icon-button
+                    icon="heroicon-m-funnel"
+                    @click="openFilters = !openFilters"
+                    :color="'gray'"
+                    x-bind:class="openFilters ? 'fi-color-custom fi-color-primary' : ''"
+                    label="Filtros"
+                />
+            </div>
+
+            <!-- MENU FLOTANTE DE FILTROS (Popover nativo) -->
+            <div x-show="openFilters" 
+                 @click.away="openFilters = false" 
+                 class="absolute left-3.5 right-3.5 top-16 rounded-xl z-20 shadow-xl border chat-filter-popover overflow-hidden"
+                 style="display: none;">
+                <div class="p-4 space-y-3">
+                    <!-- Filtro Departamento -->
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Departamentos</label>
+                        <x-filament::input.wrapper>
+                            <select wire:model.live="filterDepartmentId"
+                                    class="fi-select-input block w-full border-none bg-transparent py-1.5 pe-8 ps-3 text-base text-gray-950 transition duration-75 focus:ring-0 dark:text-white sm:text-sm sm:leading-6 [&_option]:bg-white [&_option]:dark:bg-gray-900">
+                                <option value="">Todos los departamentos</option>
+                                @foreach($departments as $dept)
+                                    <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                                @endforeach
+                            </select>
+                        </x-filament::input.wrapper>
+                    </div>
+
+                    <!-- Filtro Usuarios/Agentes -->
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Usuarios</label>
+                        <x-filament::input.wrapper>
+                            <select wire:model.live="filterUserId"
+                                    class="fi-select-input block w-full border-none bg-transparent py-1.5 pe-8 ps-3 text-base text-gray-950 transition duration-75 focus:ring-0 dark:text-white sm:text-sm sm:leading-6 [&_option]:bg-white [&_option]:dark:bg-gray-900">
+                                <option value="">Todos los agentes</option>
+                                @foreach($agents as $agent)
+                                    <option value="{{ $agent->id }}">{{ $agent->name }}</option>
+                                @endforeach
+                            </select>
+                        </x-filament::input.wrapper>
+                    </div>
+
+                    <!-- Filtro Estado -->
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Estado</label>
+                        <x-filament::input.wrapper>
+                            <select wire:model.live="filterStatus"
+                                    class="fi-select-input block w-full border-none bg-transparent py-1.5 pe-8 ps-3 text-base text-gray-950 transition duration-75 focus:ring-0 dark:text-white sm:text-sm sm:leading-6 [&_option]:bg-white [&_option]:dark:bg-gray-900">
+                                <option value="open">Abiertos</option>
+                                <option value="snoozed">Pospuestos</option>
+                                <option value="closed">Cerrados</option>
+                            </select>
+                        </x-filament::input.wrapper>
+                    </div>
+
+                    <!-- Filtro Etiquetas -->
+                    @if($tags->isNotEmpty())
+                    <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Etiquetas</label>
+                        <x-filament::input.wrapper>
+                            <select wire:model.live="filterTagId"
+                                    class="fi-select-input block w-full border-none bg-transparent py-1.5 pe-8 ps-3 text-base text-gray-950 transition duration-75 focus:ring-0 dark:text-white sm:text-sm sm:leading-6 [&_option]:bg-white [&_option]:dark:bg-gray-900">
+                                <option value="">Todas las etiquetas</option>
+                                @foreach($tags as $tag)
+                                    <option value="{{ $tag->id }}">{{ $tag->name }}</option>
+                                @endforeach
+                            </select>
+                        </x-filament::input.wrapper>
+                    </div>
+                    @endif
+                </div>
+
+                <!-- Botones Aplicar / Limpiar: nativos Filament -->
+                <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
+                    <x-filament::button color="gray" @click="openFilters = false"
+                        wire:click="$set('filterDepartmentId', null); $set('filterUserId', null); $set('filterStatus', 'open'); $set('filterTagId', null);">
+                        Limpiar
+                    </x-filament::button>
+                    <x-filament::button @click="openFilters = false">
+                        Aplicar
+                    </x-filament::button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros Rápidos (Míos, En Espera, Todos) -->
+        <div class="px-4 py-3 flex items-center gap-4 border-b chat-header-bg shrink-0"
+             x-data="{ scope: @js($filterScope) }"
+             x-init="$watch('$wire.filterScope', v => scope = v)">
+
+            <!-- Míos Pill -->
+            <div class="relative inline-block">
+                <button 
+                    @click="scope = 'mine'; $wire.set('filterScope', 'mine')"
+                    :class="scope === 'mine' ? 'chat-pill-selected' : 'chat-pill-unselected'"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150"
+                    type="button">
+                    Míos
+                </button>
+                @if($mineCount > 0)
+                    <span class="absolute -bottom-1.5 -right-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#10b981] text-black shadow-sm">
+                        {{ $mineCount }}
+                    </span>
+                @endif
+            </div>
+
+            <!-- En Espera Pill -->
+            <div class="relative inline-block">
+                <button 
+                    @click="scope = 'unassigned'; $wire.set('filterScope', 'unassigned')"
+                    :class="scope === 'unassigned' ? 'chat-pill-selected' : 'chat-pill-unselected'"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150"
+                    type="button">
+                    En espera
+                </button>
+                @if($unassignedCount > 0)
+                    <span class="absolute -bottom-1.5 -right-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#10b981] text-black shadow-sm">
+                        {{ $unassignedCount }}
+                    </span>
+                @endif
+            </div>
+
+            <!-- Todos Pill -->
+            <div class="relative inline-block">
+                <button 
+                    @click="scope = 'all'; $wire.set('filterScope', 'all')"
+                    :class="scope === 'all' ? 'chat-pill-selected' : 'chat-pill-unselected'"
+                    class="px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-150"
+                    type="button">
+                    Todos
+                </button>
+                @if($allCount > 0)
+                    <span class="absolute -bottom-1.5 -right-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#10b981] text-black shadow-sm">
+                        {{ $allCount }}
+                    </span>
+                @endif
+            </div>
+        </div>
+
+
+
+
+        <!-- Listado de Chats -->
+        <div class="flex-1 overflow-y-auto scrollbar-thin divide-y divide-zinc-200/70 dark:divide-zinc-800/60 chat-panel-left">
+            @forelse($conversations as $convo)
+                <div wire:click="selectConversation({{ $convo->id }})" 
+                     class="p-4 flex items-start space-x-3 cursor-pointer transition duration-155 relative border-l-[4px] {{ $activeConversationId === $convo->id ? 'bg-zinc-50 dark:bg-zinc-800/40 border-amber-500' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 border-transparent' }}">
+                    
+                    <!-- Avatar Iniciales -->
+                    <div class="w-10 h-10 rounded-full bg-[#10b981] flex items-center justify-center font-bold text-white shadow-sm text-sm shrink-0">
+                        {{ substr($convo->contact->name ?? $convo->contact->phone ?? 'C', 0, 1) }}
+                    </div>
+
+                    <!-- Datos del Chat -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between mb-1">
+                            <h2 class="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                                {{ $convo->contact->name ?? $convo->contact->phone }}
+                            </h2>
+                            <span class="text-[10px] text-zinc-500 dark:text-zinc-450">
+                                {{ $convo->last_message_at ? $convo->last_message_at->format('H:i') : '' }}
+                            </span>
+                        </div>
+                        
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate mb-2">
+                            {{ $convo->messages->last()?->body ?? 'Sin mensajes aún' }}
+                        </p>
+
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1.5">
+                                <span class="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 uppercase tracking-wider">
+                                    WhatsApp
+                                </span>
+                                @if($convo->assignedUser)
+                                    <span class="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 max-w-[120px] truncate">
+                                        👤 {{ $convo->assignedUser->name }}
+                                    </span>
+                                @else
+                                    <span class="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                        Cola
+                                    </span>
+                                @endif
+                            </div>
+
+                            <!-- Iconos de Acción del Chat -->
+                            <div class="flex items-center space-x-1.5 text-zinc-400 dark:text-zinc-500">
+                                <svg class="w-3.5 h-3.5 hover:text-zinc-800 dark:hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                <svg class="w-3.5 h-3.5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.003 5.324 5.328 0 11.896 0c3.181.001 6.171 1.242 8.423 3.497 2.253 2.253 3.492 5.244 3.491 8.423-.003 6.574-5.328 11.9-11.895 11.9-2.004-.001-3.974-.509-5.727-1.478L0 24zm6.59-4.846c1.62.963 3.21 1.48 4.757 1.48 5.263 0 9.545-4.28 9.549-9.545.002-2.551-.993-4.95-2.802-6.76C16.328 2.519 13.931 1.52c-5.268 0-9.55 4.282-9.554 9.548-.002 1.761.477 3.327 1.39 4.79l-.999 3.649 3.829-.973zm10.938-6.402c-.3-.15-1.772-.875-2.046-.975-.276-.102-.476-.15-.676.15-.2.3-.775.975-.95 1.174-.175.2-.35.226-.65.076-.3-.15-1.267-.467-2.413-1.485-.892-.796-1.493-1.778-1.668-2.078-.175-.3-.018-.462.13-.61.137-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.628-.926-2.227-.244-.588-.492-.507-.676-.516-.174-.008-.375-.01-.575-.01-.2 0-.525.075-.8.376-.275.3-1.05 1.026-1.05 2.502 0 1.477 1.075 2.902 1.225 3.102.15.2 2.115 3.227 5.125 4.525.715.309 1.275.494 1.71.633.72.229 1.375.197 1.893.12.577-.087 1.772-.725 2.022-1.425.25-.7.25-1.3 0-1.425-.05-.125-.25-.2-.55-.35z"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="p-8 text-center text-zinc-550 text-xs">
+                    No se encontraron conversaciones.
+                </div>
+            @endforelse
+        </div>
+    </div>
+
+    <!-- COLUMNA 2 (Panel de la Derecha): Chat Activo o Detalle -->
+    <div class="flex-1 rounded-xl flex flex-col overflow-hidden shadow-sm dark:shadow-2xl border chat-panel-right relative">
+        @if($activeConversation)
+            <!-- Header del Chat Activo -->
+            <div class="p-4 flex items-center justify-between border-b chat-header-bg">
+                <div class="flex items-center space-x-3">
+                    <div class="w-11 h-11 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center font-bold text-zinc-750 dark:text-[#f4f4f5] shadow-sm text-lg">
+                        {{ substr($activeConversation->contact->name ?? 'C', 0, 1) }}
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h2 class="font-bold text-zinc-900 dark:text-zinc-100 text-sm">
+                                {{ $activeConversation->contact->name ?? $activeConversation->contact->phone }}
+                            </h2>
+                            <svg class="w-3.5 h-3.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                        </div>
+                        <div class="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 space-y-0.5">
+                            <div>Asignado a: <span class="font-semibold text-zinc-750 dark:text-zinc-300">{{ $activeConversation->assignedUser?->name ?? 'Sin asignar' }}</span></div>
+                            <div class="flex items-center space-x-1">
+                                <svg class="w-3 h-3 text-[#10b981]" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.003 5.324 5.328 0 11.896 0c3.181.001 6.171 1.242 8.423 3.497 2.253 2.253 3.492 5.244 3.491 8.423-.003 6.574-5.328 11.9-11.895 11.9-2.004-.001-3.974-.509-5.727-1.478L0 24zm6.59-4.846c1.62.963 3.21 1.48 4.757 1.48 5.263 0 9.545-4.28 9.549-9.545.002-2.551-.993-4.95-2.802-6.76C16.328 2.519 13.931 1.52c-5.268 0-9.55 4.282-9.554 9.548-.002 1.761.477 3.327 1.39 4.79l-.999 3.649 3.829-.973zm10.938-6.402c-.3-.15-1.772-.875-2.046-.975-.276-.102-.476-.15-.676.15-.2.3-.775.975-.95 1.174-.175.2-.35.226-.65.076-.3-.15-1.267-.467-2.413-1.485-.892-.796-1.493-1.778-1.668-2.078-.175-.3-.018-.462.13-.61.137-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.628-.926-2.227-.244-.588-.492-.507-.676-.516-.174-.008-.375-.01-.575-.01-.2 0-.525.075-.8.376-.275.3-1.05 1.026-1.05 2.502 0 1.477 1.075 2.902 1.225 3.102.15.2 2.115 3.227 5.125 4.525.715.309 1.275.494 1.71.633.72.229 1.375.197 1.893.12.577-.087 1.772-.725 2.022-1.425.25-.7.25-1.3 0-1.425-.05-.125-.25-.2-.55-.35z"/></svg>
+                                <span>Conexión principal</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botonera de Acciones -->
+                <div class="flex items-center space-x-2">
+                    @if(!$activeConversation->assigned_user_id || $activeConversation->assigned_user_id !== auth()->id())
+                        <!-- Aceptar Conversación -->
+                        <button wire:click="accept" 
+                                class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-xs font-bold rounded-md transition duration-200 shadow-sm text-white cursor-pointer border-none" 
+                                style="outline: none !important;">
+                            <span>Aceptar Chat</span>
+                        </button>
+                    @else
+                        <!-- Resolver (Cerrar) -->
+                        <button wire:click="openResolveModal" 
+                                class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-xs font-bold rounded-l-md transition text-white cursor-pointer border-none" 
+                                style="outline: none !important;">
+                            Resolver
+                        </button>
+                        
+                        <!-- Acciones Adicionales Dropdown -->
+                        <div x-data="{ open: false }" class="relative inline-block text-left">
+                            <button @click="open = !open" 
+                                    class="px-2 py-2 bg-amber-500 hover:bg-amber-600 text-xs font-bold rounded-r-md transition text-white cursor-pointer border-none" 
+                                    style="outline: none !important; border-left: 1px solid rgba(255,255,255,0.15) !important;">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div x-show="open" @click.away="open = false" 
+                                 class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg z-20 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                                <div class="py-1">
+                                    <button wire:click="keepWithMe" @click="open = false" class="block w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition cursor-pointer">
+                                        Mantener conmigo
+                                    </button>
+                                    <button wire:click="returnToQueue" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-655 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition cursor-pointer border-t border-zinc-100 dark:border-zinc-800/50">
+                                        Devolver a cola
+                                    </button>
+                                    <button wire:click="openSnoozeModal" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-655 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition cursor-pointer">
+                                        Posponer chat
+                                    </button>
+                                    <button wire:click="openTransferModal" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-655 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition cursor-pointer">
+                                        Transferir chat
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <!-- Listado de Mensajes (con Fondo Doodle de WhatsApp) -->
+            <div class="flex-1 p-6 overflow-y-auto scrollbar-thin flex flex-col space-y-4 relative z-0 chat-messages-area"
+                 x-init="$nextTick(() => { $el.scrollTop = $el.scrollHeight })"
+                 x-on:message-sent.window="$nextTick(() => { $el.scrollTop = $el.scrollHeight })">
+                
+                <!-- Doodle Background Layer Overlay -->
+                <div class="absolute inset-0 opacity-[0.03] pointer-events-none z-[-1] chat-doodle-overlay" 
+                     style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22><path d=%22M40 0 C20 0 0 20 0 40 C0 60 20 80 40 80 C60 80 80 60 80 40 C80 20 60 0 40 0 Z M40 10 C50 10 60 20 60 30 C60 40 50 50 40 50 C30 50 20 40 20 30 C20 20 30 10 40 10 Z%22 fill=%22%23fff%22/></svg>'); background-repeat: repeat; background-size: 120px 120px;">
+                </div>
+
+                @php
+                    $lastDate = null;
+                @endphp
+
+                @foreach($messages as $msg)
+                    @php
+                        $msgDate = $msg->sent_at ? $msg->sent_at->format('Y-m-d') : $msg->created_at->format('Y-m-d');
+                    @endphp
+
+                    @if($lastDate !== $msgDate)
+                        <!-- Separador de fecha -->
+                        <div class="flex justify-center my-2">
+                            <span class="text-[10px] px-3 py-1 rounded font-semibold bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                                @if($msgDate === now()->format('Y-m-d'))
+                                    Hoy
+                                @elseif($msgDate === now()->subDay()->format('Y-m-d'))
+                                    Ayer
+                                @else
+                                    {{ $msg->sent_at ? $msg->sent_at->format('d/m/Y') : $msg->created_at->format('d/m/Y') }}
+                                @endif
+                            </span>
+                        </div>
+                        @php $lastDate = $msgDate; @endphp
+                    @endif
+
+                    @if($msg->sender_type === 'system')
+                        <!-- Mensaje de Sistema / Auditoría -->
+                        <div class="flex justify-end my-1">
+                            <div class="max-w-[70%] flex flex-col items-end">
+                                <div class="px-3.5 py-2 rounded-xl text-xs leading-relaxed italic shadow-sm bg-zinc-200 dark:bg-zinc-850 text-zinc-500 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-850">
+                                    {{ $msg->body }}
+                                </div>
+                                <span class="text-[9px] text-zinc-500 mt-0.5 px-1">
+                                    {{ $msg->sent_at ? $msg->sent_at->format('H:i') : $msg->created_at->format('H:i') }}
+                                </span>
+                            </div>
+                        </div>
+                    @else
+                        <div class="flex {{ $msg->direction === 'inbound' ? 'justify-start' : 'justify-end' }}">
+                            <div class="max-w-[70%] flex flex-col {{ $msg->direction === 'inbound' ? 'items-start' : 'items-end' }}">
+                                
+                                @if($msg->direction === 'inbound')
+                                    <!-- Burbuja Inbound (Cliente) -->
+                                    <div class="px-3.5 py-2 rounded-xl text-xs leading-relaxed shadow-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-750">
+                                        {!! nl2br(e($msg->body)) !!}
+                                    </div>
+                                @else
+                                    <!-- Burbuja Outbound (Agente) -->
+                                    <div class="px-3.5 py-2 rounded-xl text-xs leading-relaxed shadow-sm bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                                        <div class="font-bold text-[10px] text-amber-500 mb-0.5">
+                                            {{ $msg->sender_user_id ? \App\Models\User::find($msg->sender_user_id)?->name : 'IA' }}:
+                                        </div>
+                                        {!! nl2br(e($msg->body)) !!}
+                                    </div>
+                                @endif
+
+                                <span class="text-[9px] text-zinc-500 mt-1 px-1 flex items-center space-x-1">
+                                    <span>{{ $msg->sent_at ? $msg->sent_at->format('H:i') : $msg->created_at->format('H:i') }}</span>
+                                    @if($msg->direction === 'outbound')
+                                        <span class="text-amber-500">
+                                            @if($msg->status === 'sent' || $msg->status === 'delivered' || $msg->status === 'read')
+                                                ✔
+                                            @elseif($msg->status === 'failed')
+                                                <span class="text-red-500" title="{{ $msg->metadata['error'] ?? 'Falla de envío' }}">⚠️</span>
+                                            @else
+                                                ⏳
+                                            @endif
+                                        </span>
+                                    @endif
+                                </span>
+                            </div>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+
+            <!-- Entrada de Mensajes (Composer) con Respuestas Rápidas -->
+            <div class="p-3 border-t chat-header-bg"
+                 x-data="{
+                    allReplies: @js($quickReplies->map(fn($r) => ['id' => $r->id, 'shortcut' => $r->shortcut, 'title' => $r->title, 'body' => $r->body])->values()),
+                    showPicker: false,
+                    pickerQuery: '',
+                    selectedIndex: 0,
+                    get filteredReplies() {
+                        if (!this.pickerQuery) return this.allReplies;
+                        const q = this.pickerQuery.toLowerCase();
+                        return this.allReplies.filter(r =>
+                            r.shortcut.toLowerCase().includes(q) ||
+                            r.title.toLowerCase().includes(q)
+                        );
+                    },
+                    onInput(event) {
+                        const val = event.target.value;
+                        const match = val.match(/(?:^|\s)\/(\S*)$/);
+                        if (match !== null) {
+                            this.pickerQuery = match[1];
+                            this.showPicker = true;
+                            this.selectedIndex = 0;
+                        } else {
+                            this.showPicker = false;
+                            this.pickerQuery = '';
+                        }
+                    },
+                    onKeydown(event) {
+                        if (!this.showPicker) return;
+                        if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredReplies.length - 1);
+                        } else if (event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+                        } else if (event.key === 'Enter' || event.key === 'Tab') {
+                            event.preventDefault();
+                            if (this.filteredReplies[this.selectedIndex]) {
+                                this.insertReply(this.filteredReplies[this.selectedIndex]);
+                            }
+                        } else if (event.key === 'Escape') {
+                            this.showPicker = false;
+                        }
+                    },
+                    insertReply(reply) {
+                        const textarea = this.$refs.composer;
+                        let body = reply.body;
+                        // Interpolar variables dinámicas del lado cliente
+                        const contactName   = @js($activeConversation?->contact?->name ?? '');
+                        const contactNumber = @js($activeConversation?->contact?->phone ?? '');
+                        const contactEmail  = @js($activeConversation?->contact?->email ?? '');
+                        const userName      = @js(auth()->user()?->name ?? '');
+                        const hour = new Date().getHours();
+                        const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+                        body = body
+                            .replace(/\{\{contactName\}\}/g, contactName)
+                            .replace(/\{\{contactNumber\}\}/g, contactNumber)
+                            .replace(/\{\{contactEmail\}\}/g, contactEmail)
+                            .replace(/\{\{userName\}\}/g, userName)
+                            .replace(/\{\{greeting\}\}/g, greeting);
+                        // Reemplaza el /comando en el texto con el body
+                        const current = textarea.value;
+                        const replaced = current.replace(/(?:^|\s)\/\S*$/, (m) => m.startsWith(' ') ? ' ' + body : body);
+                        textarea.value = replaced;
+                        // Sincronizar con Livewire
+                        textarea.dispatchEvent(new Event('input'));
+                        this.showPicker = false;
+                        this.pickerQuery = '';
+                        textarea.focus();
+                    }
+                 }">
+
+                <!-- Picker de Respuestas Rápidas -->
+                <div x-show="showPicker && filteredReplies.length > 0"
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="mb-2 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl overflow-hidden"
+                     style="display:none; background: var(--chat-panel-bg, white);"
+                     :style="document.documentElement.classList.contains('dark') ? 'background:#18181b;' : 'background:#fff;'">
+                    <div class="px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-1.5">
+                        <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Respuestas rápidas</span>
+                        <span class="text-[10px] text-zinc-400">— escribe para filtrar · ↑↓ navegar · Enter insertar · Esc cerrar</span>
+                    </div>
+                    <ul class="max-h-52 overflow-y-auto py-1">
+                        <template x-for="(reply, idx) in filteredReplies" :key="reply.id">
+                            <li @click="insertReply(reply)"
+                                :class="idx === selectedIndex
+                                    ? 'bg-amber-50 dark:bg-amber-900/20 cursor-pointer'
+                                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60 cursor-pointer'"
+                                class="px-3 py-2 flex items-start gap-3 transition-colors">
+                                <span class="shrink-0 mt-0.5 inline-block font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                                      x-text="'/' + reply.shortcut"></span>
+                                <div class="min-w-0">
+                                    <div class="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate" x-text="reply.title"></div>
+                                    <div class="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5" x-text="reply.body"></div>
+                                </div>
+                            </li>
+                        </template>
+                        <li x-show="filteredReplies.length === 0" class="px-3 py-3 text-xs text-zinc-400 text-center">
+                            Sin resultados
+                        </li>
+                    </ul>
+                </div>
+
+                <form wire:submit.prevent="sendMessage" class="flex items-center space-x-2">
+                    <textarea wire:model="newMessageBody"
+                              x-ref="composer"
+                              @input="onInput($event)"
+                              @keydown="onKeydown($event)"
+                              x-on:keydown.ctrl.enter.prevent="showPicker = false; $wire.sendMessage()"
+                              placeholder="Escriba un mensaje o / para respuestas rápidas"
+                              rows="1"
+                              class="flex-1 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-0 focus:border-amber-500 transition text-sm chat-search-input border resize-none min-h-[38px] max-h-[120px]"
+                              style="outline: none !important; box-shadow: none !important;"></textarea>
+
+                    <button type="submit"
+                            class="p-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-md transition duration-200 flex items-center justify-center cursor-pointer border-none"
+                            style="outline: none !important;">
+                        <svg class="w-4.5 h-4.5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        @else
+            <!-- Panel Vacío de Selección -->
+            <div class="flex-1 flex flex-col items-center justify-center p-8 chat-panel-right">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center text-zinc-400 text-xl shadow mb-4 border chat-header-bg">
+                    💬
+                </div>
+                <h4 class="text-sm font-bold text-zinc-900 dark:text-zinc-100">Bandeja de Entrada</h4>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400 text-center max-w-xs mt-1">
+                    Selecciona una conversación de la lista izquierda para comenzar a chatear.
+                </p>
+            </div>
+        @endif
+    </div>
+
+    <!-- COLUMNA 3 (Detalles de Contacto) -->
+    @if($activeConversation)
+    <div class="w-[280px] rounded-xl flex flex-col overflow-hidden shadow-sm dark:shadow-2xl border chat-panel-left shrink-0">
+        <div class="p-4 border-b chat-header-bg">
+            <h3 class="font-bold text-sm text-zinc-900 dark:text-zinc-100">Detalles de Contacto</h3>
+        </div>
+        <div class="p-4 flex-1 overflow-y-auto scrollbar-thin">
+            <!-- Info básica -->
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-16 h-16 rounded-full bg-[#10b981] flex items-center justify-center font-bold text-white shadow-sm text-2xl mb-3">
+                    {{ substr($activeConversation->contact->name ?? $activeConversation->contact->phone ?? 'C', 0, 1) }}
+                </div>
+                <h4 class="font-bold text-zinc-900 dark:text-zinc-100 text-center">{{ $activeConversation->contact->name ?? 'Sin Nombre' }}</h4>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400 text-center">{{ $activeConversation->contact->phone }}</p>
+                @if($activeConversation->contact->email)
+                    <p class="text-xs text-zinc-500 dark:text-zinc-400 text-center">{{ $activeConversation->contact->email }}</p>
+                @endif
+            </div>
+
+            <!-- Etiquetas -->
+            @if($activeConversation->tags->isNotEmpty())
+            <div class="mb-5">
+                <h5 class="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 uppercase tracking-wide">Etiquetas</h5>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($activeConversation->tags as $tag)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700">
+                            {{ $tag->name }}
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
+            <!-- Detalles adicionales -->
+            <div class="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                <div>
+                    <span class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Canal</span>
+                    <span class="text-xs text-zinc-800 dark:text-zinc-200">{{ $activeConversation->channelConnection->channel_type ?? 'Desconocido' }}</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Departamento</span>
+                    <span class="text-xs text-zinc-800 dark:text-zinc-200">{{ $activeConversation->department->name ?? 'Sin asignar' }}</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Estado</span>
+                    <span class="text-xs text-zinc-800 dark:text-zinc-200 capitalize">{{ trans('chat.'.$activeConversation->status) ?? $activeConversation->status }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+</div>
+
+    <!-- MODAL: Resolver Conversación -->
+    @if($showResolveModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity duration-300">
+            <div class="rounded-xl shadow-xl w-full max-w-sm overflow-hidden transform scale-100 transition-all duration-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                <div class="p-4 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800">
+                    <h3 class="font-bold text-xs text-zinc-800 dark:text-[#f4f4f5]">Resolver conversación</h3>
+                    <button wire:click="closeResolveModal" class="text-zinc-500 hover:text-zinc-300 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="p-4 space-y-4">
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Selecciona el motivo de contacto para cerrar este chat.
+                    </p>
+                    
+                    @if($contactReasons->isNotEmpty())
+                    <div>
+                        <label class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Motivo del contacto (Opcional)</label>
+                        <select wire:model="resolveReasonId" 
+                                class="w-full rounded-lg p-2 text-xs focus:outline-none bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800">
+                            <option value="">-- Ninguno --</option>
+                            @foreach($contactReasons as $reason)
+                                <option value="{{ $reason->id }}">{{ $reason->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+
+                    <label class="flex items-center space-x-2 cursor-pointer mt-2">
+                        <input type="checkbox" wire:model="resolveWithoutGoodbye" class="rounded border-zinc-300 text-amber-500 shadow-sm focus:border-amber-500 focus:ring focus:ring-amber-500 focus:ring-opacity-50">
+                        <span class="text-xs text-zinc-700 dark:text-zinc-300">Resolver sin enviar mensaje de despedida</span>
+                    </label>
+                </div>
+
+                <div class="p-4 flex items-center justify-end space-x-1.5 bg-zinc-50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800">
+                    <button wire:click="closeResolveModal" 
+                            class="px-3 py-1.5 text-[10px] font-semibold rounded text-zinc-600 dark:text-zinc-300 transition cursor-pointer bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700">
+                        Cancelar
+                    </button>
+                    <button wire:click="confirmResolve" 
+                            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-[10px] font-semibold rounded text-white shadow transition cursor-pointer border-none">
+                        Confirmar y Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- MODAL: Posponer Conversación (Snooze) -->
+    @if($showSnoozeModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity duration-300">
+            <div class="rounded-xl shadow-xl w-full max-w-sm overflow-hidden transform scale-100 transition-all duration-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                <div class="p-4 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800">
+                    <h3 class="font-bold text-xs text-zinc-800 dark:text-[#f4f4f5]">Posponer conversación</h3>
+                    <button wire:click="closeSnoozeModal" class="text-zinc-500 hover:text-zinc-300 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="p-4 space-y-3">
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        El chat se ocultará de los pendientes y volverá a aparecer al expirar el tiempo.
+                    </p>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Posponer por</label>
+                        <select wire:model="snoozeHours" 
+                                class="w-full rounded-lg p-2 text-xs focus:outline-none bg-zinc-50 dark:bg-zinc-950 text-zinc-850 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800">
+                            <option value="2">2 horas</option>
+                            <option value="4">4 horas</option>
+                            <option value="8">8 horas</option>
+                            <option value="24">24 horas (1 día)</option>
+                            <option value="48">48 horas (2 días)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="p-4 flex items-center justify-end space-x-1.5 bg-zinc-50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800">
+                    <button wire:click="closeSnoozeModal" 
+                            class="px-3 py-1.5 text-[10px] font-semibold rounded text-zinc-600 dark:text-zinc-300 transition cursor-pointer bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700">
+                        Cancelar
+                    </button>
+                    <button wire:click="snooze" 
+                            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-[10px] font-semibold rounded text-white shadow transition cursor-pointer border-none">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- MODAL: Transferir Conversación -->
+    @if($showTransferModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity duration-300">
+            <div class="rounded-xl shadow-xl w-full max-w-sm overflow-hidden transform scale-100 transition-all duration-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                <div class="p-4 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800">
+                    <h3 class="font-bold text-xs text-zinc-800 dark:text-[#f4f4f5]">Transferir conversación</h3>
+                    <button wire:click="closeTransferModal" class="text-zinc-500 hover:text-zinc-300 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="p-4 space-y-3">
+                    <p class="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Asigna este chat a otro agente o departamento de destino.
+                    </p>
+
+                    <div>
+                        <label class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Departamento de Destino</label>
+                        <select wire:model="transferDepartmentId" 
+                                class="w-full rounded-lg p-2.5 text-xs focus:outline-none bg-zinc-50 dark:bg-zinc-950 text-zinc-850 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800">
+                            <option value="">Mantener depto. actual</option>
+                            @foreach($departments as $dept)
+                                <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Agente de Destino</label>
+                        <select wire:model="transferUserId" 
+                                class="w-full rounded-lg p-2.5 text-xs focus:outline-none bg-zinc-50 dark:bg-zinc-950 text-zinc-850 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800">
+                            <option value="">Cola (Sin agente)</option>
+                            @foreach($agents as $agent)
+                                <option value="{{ $agent->id }}">{{ $agent->name }} ({{ $agent->role }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="p-4 flex items-center justify-end space-x-1.5 bg-zinc-50 dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-800">
+                    <button wire:click="closeTransferModal" 
+                            class="px-3 py-1.5 text-[10px] font-semibold rounded text-zinc-600 dark:text-zinc-300 transition cursor-pointer bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700">
+                        Cancelar
+                    </button>
+                    <button wire:click="transfer" 
+                            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-[10px] font-semibold rounded text-white shadow transition cursor-pointer border-none">
+                        Transferir
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+</div>

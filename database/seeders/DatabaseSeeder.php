@@ -15,11 +15,50 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Crear Empresa Alfa
+        $alfa = \App\Models\Company::create([
+            'name' => 'Empresa Alfa',
+            'slug' => 'empresa-alfa',
+            'timezone' => 'America/Argentina/Buenos_Aires',
+            'default_language' => 'es',
+        ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // Crear usuarios para Empresa Alfa
+        User::factory()->admin()->create([
+            'company_id' => $alfa->id,
+            'name' => 'Admin Alfa',
+            'email' => 'admin@alfa.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        User::factory()->agent()->create([
+            'company_id' => $alfa->id,
+            'name' => 'Agente Alfa',
+            'email' => 'agent@alfa.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        // Crear Empresa Beta
+        $beta = \App\Models\Company::create([
+            'name' => 'Empresa Beta',
+            'slug' => 'empresa-beta',
+            'timezone' => 'America/Argentina/Buenos_Aires',
+            'default_language' => 'es',
+        ]);
+
+        // Crear usuarios para Empresa Beta
+        User::factory()->admin()->create([
+            'company_id' => $beta->id,
+            'name' => 'Admin Beta',
+            'email' => 'admin@beta.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+        ]);
+
+        User::factory()->agent()->create([
+            'company_id' => $beta->id,
+            'name' => 'Agente Beta',
+            'email' => 'agent@beta.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
         ]);
     }
 }

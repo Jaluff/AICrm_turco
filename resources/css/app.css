@@ -1,9 +1,101 @@
-@import 'tailwindcss';
+@import "tailwindcss/utilities" layer(utilities);
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+/* Estilos específicos para la Bandeja de Chats */
+.chat-inbox-container {
+    background-color: #f4f4f5 !important;
+    color: #18181b !important;
+}
+.chat-panel-left {
+    background-color: #ffffff !important;
+    border-color: #e4e4e7 !important;
+}
+.chat-panel-right {
+    background-color: #f4f4f5 !important;
+    border-color: #e4e4e7 !important;
+}
+.chat-pill-unselected {
+    background-color: #e4e4e7 !important;
+    border: none !important;
+    border-width: 0 !important;
+    color: #27272a !important;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.chat-pill-unselected:hover {
+    background-color: #d4d4d8 !important;
+}
+.chat-pill-selected {
+    border: none !important;
+    border-width: 0 !important;
+    background-color: rgba(var(--primary-500), 0.2) !important;
+    color: rgb(var(--primary-600)) !important;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.chat-pill-selected:hover {
+    background-color: rgba(var(--primary-500), 0.28) !important;
+}
+.chat-header-bg {
+    background-color: #ffffff !important;
+    border-color: #e4e4e7 !important;
+}
+.chat-messages-area {
+    background-color: #efeae2 !important;
+}
+.chat-filter-popover {
+    background-color: #ffffff !important;
+    border-color: #e4e4e7 !important;
+    color: #18181b !important;
+}
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+/* MODO OSCURO (FILAMENT) */
+.dark .chat-inbox-container {
+    background-color: #09090b !important;
+    color: #f4f4f5 !important;
+}
+.dark .chat-panel-left {
+    background-color: #18181b !important;
+    border-color: #27272a !important;
+}
+.dark .chat-panel-right {
+    background-color: #18181b !important;
+    border-color: #27272a !important;
+}
+.dark .chat-pill-unselected {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: none !important;
+    border-width: 0 !important;
+    color: #f4f4f5 !important;
+}
+.dark .chat-pill-unselected:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+}
+.dark .chat-pill-selected {
+    border: none !important;
+    border-width: 0 !important;
+    background-color: rgba(var(--primary-500), 0.25) !important;
+    color: rgb(var(--primary-400)) !important;
+}
+.dark .chat-pill-selected:hover {
+    background-color: rgba(var(--primary-500), 0.35) !important;
+}
+.dark .chat-header-bg {
+    background-color: #18181b !important;
+    border-color: #27272a !important;
+}
+.dark .chat-messages-area {
+    background-color: #0b141a !important;
+}
+
+.dark .chat-filter-popover {
+    background-color: #18181b !important;
+    border-color: #27272a !important;
+    color: #f4f4f5 !important;
+}
+
+/* Global Sidebar Width Customizations handled natively via AdminPanelProvider */
+@media (min-width: 1024px) {
+    .fi-sidebar {
+        z-index: 35 !important; /* Prevents topbar from cutting off the sidebar header/brand logo */
+    }
 }

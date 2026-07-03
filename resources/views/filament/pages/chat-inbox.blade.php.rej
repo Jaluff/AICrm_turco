@@ -1,0 +1,5 @@
+@@ -719,3 +720,4 @@
+         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+     });
+ </script>
++</x-filament-panels::page>

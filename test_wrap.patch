@@ -1,0 +1,16 @@
+--- resources/views/filament/pages/chat-inbox.blade.php
++++ resources/views/filament/pages/chat-inbox.blade.php
+@@ -1,7 +1,8 @@
+ @vite(['resources/css/app.css'])
+ 
++<x-filament-panels::page>
+ 
+ <div class="flex h-[calc(100vh-6rem)] gap-3 overflow-hidden relative z-0 chat-inbox-container rounded-xl" 
+      wire:poll.10s="refreshList"
+      x-data="{ openFilters: false }">
+     
+@@ -719,3 +720,4 @@
+         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+     });
+ </script>
++</x-filament-panels::page>
